@@ -1,5 +1,5 @@
+#include "./log_utils.hpp"
 #include <arpa/inet.h>
-#include <format>
 #include <iostream>
 #include <netdb.h>
 #include <strings.h>
@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
   int reuse = 1;
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) <
       0) {
-    std::cerr << "setsockopt failed\n";
+    spd::error("setsockopt failed\n");
     return 1;
   }
 
@@ -36,34 +36,34 @@ int main(int argc, char **argv) {
 
   if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) !=
       0) {
-    std::cerr << "Failed to bind to port 6379\n";
+    spd::error("Failed to bind to port 6379\n");
     return 1;
   }
 
   int connection_backlog = 5;
   if (listen(server_fd, connection_backlog) != 0) {
-    std::cerr << "listen failed\n";
+    spd::error("listen failed\n");
     return 1;
   }
 
   struct sockaddr_in client_addr;
   int client_addr_len = sizeof(client_addr);
-  std::cout << "Waiting for a client to connect...\n";
+  spd::info("Waiting for a client to connect...\n");
 
   int client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
                          (socklen_t *)&client_addr_len);
-  std::cout << "Client connected\n";
+  spd::info("Client connected\n");
   char command[256];
   bzero(command, 256);
 
   if (int rbytes = read(client_fd, command, sizeof(command)); rbytes != -1) {
-    std::cout << std::format("command: {}\n", command);
+    spd::info("command: {}\n", parse_crlf(command));
     if (std::string(command) == "PING") {
-      std::cout << "Command received: PING" << std::endl;
+      spd::info("Command received: PING\n");
       std::string resp = "+PONG\r\n";
       if (int wbytes = write(client_fd, resp.c_str(), resp.size());
           wbytes != resp.size()) {
-        std::cerr << "Command PING response, write error" << std::endl;
+        spd::error("Command PING response, write error\n");
       }
     }
   }
