@@ -1,4 +1,5 @@
 #include "./log_utils.hpp"
+#include "./resp_parser.hpp"
 #include <arpa/inet.h>
 #include <iostream>
 #include <netdb.h>
@@ -57,14 +58,18 @@ int main(int argc, char **argv) {
   bzero(command, 256);
 
   if (int rbytes = read(client_fd, command, sizeof(command)); rbytes != -1) {
-    spd::info("command: {}\n", parse_crlf(command));
-    if (std::string(command) == "PING") {
-      spd::info("Command received: PING\n");
-      std::string resp = "+PONG\r\n";
-      if (int wbytes = write(client_fd, resp.c_str(), resp.size());
-          wbytes != resp.size()) {
-        spd::error("Command PING response, write error\n");
+    spd::info("recieved from client: {}\n", parse_crlf(command));
+    if (auto parsed_command = resp_parser(command); parsed_command) {
+      spd::info("parsed_command: {}\n", parse_crlf(*parsed_command));
+      if (*parsed_command == "PING") {
+        std::string resp = "+PONG\r\n";
+        if (int wbytes = write(client_fd, resp.c_str(), resp.size());
+            wbytes != resp.size()) {
+          spd::error("Command PING response, write error\n");
+        }
       }
+    } else {
+      spd::error("Failure in parsing command: {}\n", parse_crlf(command));
     }
   }
 
