@@ -1,6 +1,8 @@
 #include <arpa/inet.h>
+#include <format>
 #include <iostream>
 #include <netdb.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -48,9 +50,23 @@ int main(int argc, char **argv) {
   int client_addr_len = sizeof(client_addr);
   std::cout << "Waiting for a client to connect...\n";
 
-  accept(server_fd, (struct sockaddr *)&client_addr,
-         (socklen_t *)&client_addr_len);
+  int client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
+                         (socklen_t *)&client_addr_len);
   std::cout << "Client connected\n";
+  char command[256];
+  bzero(command, 256);
+
+  if (int rbytes = read(client_fd, command, sizeof(command)); rbytes != -1) {
+    std::cout << std::format("command: {}\n", command);
+    if (std::string(command) == "PING") {
+      std::cout << "Command received: PING" << std::endl;
+      std::string resp = "+PONG\r\n";
+      if (int wbytes = write(client_fd, resp.c_str(), resp.size());
+          wbytes != resp.size()) {
+        std::cerr << "Command PING response, write error" << std::endl;
+      }
+    }
+  }
 
   close(server_fd);
 
