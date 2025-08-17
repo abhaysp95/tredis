@@ -20,7 +20,7 @@ ConnectionHandler::ConnectionHandler(int server_fd, HandlerFunc &&handler) {
 void ConnectionHandler::stop() { close(this->client_fd); }
 
 ConnectionHandler::~ConnectionHandler() {
-  this->stop();
+  // this->stop();
   if (this->t.joinable())
     this->t.join();
 }

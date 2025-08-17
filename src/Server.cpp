@@ -13,23 +13,23 @@ void resp_command_response(int client_fd,
                            const struct sockaddr_in &client_addr) {
   spd::info("Client connected: addr: {}, port: {}\n",
             client_addr.sin_addr.s_addr, client_addr.sin_port);
-  char command[256];
-  bzero(command, 256);
+  // we'll handling streaming logic later
+  char command[1024];
+  bzero(command, 1024);
 
   if (int rbytes = read(client_fd, command, sizeof(command)); -1 != rbytes) {
     spd::info("recieved from client: {}\n", parse_crlf(command));
-    if (auto parsed_command = resp_parser(command); parsed_command) {
-      spd::info("parsed_command: {}\n", parse_crlf(*parsed_command));
-      if ("PING" == *parsed_command) {
-        std::string resp = "+PONG\r\n";
-        if (int wbytes = write(client_fd, resp.c_str(), resp.size());
-            wbytes != resp.size()) {
-          spd::error("Command PING response, write error\n");
-        }
+    std::string_view buffer(command);
+    size_t pos = 0;
+    std::string resp = "+PONG\r\n";
+    while ((pos = buffer.find("PING", pos + 1)) != std::string::npos) {
+      if ((write(client_fd, resp.c_str(), resp.size())) != resp.size()) {
+        spd::error("Error in sending response to client");
       }
-    } else {
-      spd::error("Failure in parsing command: {}\n", parse_crlf(command));
     }
+  } else {
+    spd::error("Error in reading: {}\n");
+    perror("read error");
   }
 }
 
@@ -73,10 +73,10 @@ int main(int argc, char **argv) {
   }
 
   std::vector<std::unique_ptr<ConnectionHandler>> handlers{};
-  while (true) {
-    handlers.emplace_back(
-        std::make_unique<ConnectionHandler>(server_fd, resp_command_response));
-  }
+  // while (true) { // single connection for now
+  handlers.emplace_back(
+      std::make_unique<ConnectionHandler>(server_fd, resp_command_response));
+  // }
 
   return 0;
 }
