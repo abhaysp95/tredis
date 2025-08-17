@@ -1,5 +1,6 @@
 #include "./log_utils.hpp"
 #include "./resp_parser.hpp"
+#include "ConnectionHandler.hpp"
 #include <arpa/inet.h>
 #include <iostream>
 #include <netdb.h>
@@ -7,6 +8,30 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+void resp_command_response(int client_fd,
+                           const struct sockaddr_in &client_addr) {
+  spd::info("Client connected: addr: {}, port: {}\n",
+            client_addr.sin_addr.s_addr, client_addr.sin_port);
+  char command[256];
+  bzero(command, 256);
+
+  if (int rbytes = read(client_fd, command, sizeof(command)); -1 != rbytes) {
+    spd::info("recieved from client: {}\n", parse_crlf(command));
+    if (auto parsed_command = resp_parser(command); parsed_command) {
+      spd::info("parsed_command: {}\n", parse_crlf(*parsed_command));
+      if ("PING" == *parsed_command) {
+        std::string resp = "+PONG\r\n";
+        if (int wbytes = write(client_fd, resp.c_str(), resp.size());
+            wbytes != resp.size()) {
+          spd::error("Command PING response, write error\n");
+        }
+      }
+    } else {
+      spd::error("Failure in parsing command: {}\n", parse_crlf(command));
+    }
+  }
+}
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -47,33 +72,11 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  struct sockaddr_in client_addr;
-  int client_addr_len = sizeof(client_addr);
-  spd::info("Waiting for a client to connect...\n");
-
-  int client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
-                         (socklen_t *)&client_addr_len);
-  spd::info("Client connected\n");
-  char command[256];
-  bzero(command, 256);
-
-  if (int rbytes = read(client_fd, command, sizeof(command)); rbytes != -1) {
-    spd::info("recieved from client: {}\n", parse_crlf(command));
-    if (auto parsed_command = resp_parser(command); parsed_command) {
-      spd::info("parsed_command: {}\n", parse_crlf(*parsed_command));
-      if (*parsed_command == "PING") {
-        std::string resp = "+PONG\r\n";
-        if (int wbytes = write(client_fd, resp.c_str(), resp.size());
-            wbytes != resp.size()) {
-          spd::error("Command PING response, write error\n");
-        }
-      }
-    } else {
-      spd::error("Failure in parsing command: {}\n", parse_crlf(command));
-    }
+  std::vector<std::unique_ptr<ConnectionHandler>> handlers{};
+  while (true) {
+    handlers.emplace_back(
+        std::make_unique<ConnectionHandler>(server_fd, resp_command_response));
   }
-
-  close(server_fd);
 
   return 0;
 }
