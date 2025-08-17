@@ -17,19 +17,21 @@ void resp_command_response(int client_fd,
   char command[1024];
   bzero(command, 1024);
 
-  if (int rbytes = read(client_fd, command, sizeof(command)); -1 != rbytes) {
-    spd::info("recieved from client: {}\n", parse_crlf(command));
-    std::string_view buffer(command);
-    size_t pos = 0;
-    std::string resp = "+PONG\r\n";
-    while ((pos = buffer.find("PING", pos + 1)) != std::string::npos) {
+  // client can write to connection multiple times, so we need to read multiple
+  // times
+  while (true) {
+    if (int rbytes = read(client_fd, command, sizeof(command)); -1 != rbytes) {
+      spd::info("recieved from client: {}\n", parse_crlf(command));
+      std::string_view buffer(command);
+      size_t pos = 0;
+      std::string resp = "+PONG\r\n";
       if ((write(client_fd, resp.c_str(), resp.size())) != resp.size()) {
         spd::error("Error in sending response to client");
       }
+    } else {
+      spd::error("Error in reading: {}\n");
+      close(client_fd);
     }
-  } else {
-    spd::error("Error in reading: {}\n");
-    perror("read error");
   }
 }
 
